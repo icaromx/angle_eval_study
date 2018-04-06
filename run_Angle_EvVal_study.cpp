@@ -67,8 +67,6 @@ void LoadPointCloud(PointCloud &points, const track_def &ord_trk);
 PCAResults DoPCA(const PointCloud &points);
 double Pythagoras(double x1,double x2,double y1,double y2,double z1,double z2);
 
-
-
 /////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////MAIN PROGRAM STARTS////////////////////////////////////////
 
@@ -77,21 +75,27 @@ int main(int argc, char **argv){
 	int track_num = atoi(argv[2]);
 	///////////////////
 	//Define Parameters
-	int prev_win_size = atoi(argv[3]);
-  	int post_win_size = atoi(argv[4]);
-	double alpha = 2.;
-	double min_costheta = -0.85;
+	int prev_win_size = 10;
+  	int post_win_size = 10;
+	double alpha = atof(argv[3]);
+	///////////////////////////////////
+	double min_costheta = -0.5;
+	double min_prev_ratio = 0.75;
+	//////////////////////////////////
 	double max_costheta =  0.96;
-	double min_prev_ratio = 0.85;
 	double min_post_ratio = 0.95;  
 	int min_points_trk = 100;
-	int count = 15;
 	std::vector<double> angles, EVRs;
 	////////////////////
 	//Setting up variable arrays
-  	for (int i = 0; i <= count; ++i){
-  		angles.push_back(min_costheta - i * 0.01);
+	int evr_count = 25;
+	int ang_count = 50;
+	cout << 25 * 50 << endl;
+  	for (int i = 0; i <= evr_count; ++i){
   		EVRs.push_back(min_prev_ratio + i * 0.01);
+  	}
+  	for (int i = 0; i <= ang_count; ++i){
+  		angles.push_back(min_costheta - i * 0.01);
   	}
   	///////////////////
   	//Define root output file
@@ -139,15 +143,19 @@ int main(int argc, char **argv){
   	///////////////////////////////////////////////////////////////////////////////////////////////////
   	std::vector< std::vector<int> > kept_tracks;
   	int counter = 0;
-  	for (int ang = 0; ang < count; ++ang){
-  		for (int evr = 0; evr < count; ++evr){
-			if(EVRs[evr] != 0.99 || angles[ang] != -0.95) continue;
+  	int count = ang_count*evr_count;
+  	for (int ang = 0; ang < ang_count; ++ang){
+  		for (int evr = 0; evr < evr_count; ++evr){
+			//if(EVRs[evr] != 0.5 || angles[ang] != -0.75) continue;
 			//cout << EVRs[evr] << ", " << angles[ang] << endl;
-			cout << "About: " << (float) counter/pow((float)count, 2.) * 100. << " Done" << endl;
+			//cout << "About: " << (float) counter/(float)count * 100. << " %" << endl;
   			counter += 1;
+  			//cout << counter << endl;
+  			//cout << count << endl;
   			double purity, efficiency, ver_rms = 0., ver_mean = 0.;
 	    	int total_num_tracks = 0;
 			int tracks_survived_ord_alg = 0;
+			int michels_survived_ord_alg = 0;
 			int michel_count = 0;
 			int track_selected_as_michel = 0;
 			int eigenval_cut = 0;
@@ -309,7 +317,12 @@ int main(int argc, char **argv){
 				    tracks_survived_ord_alg += 1;
 					//Finished Ordering Points
 				    //////////////////////////
-
+				    for (int cand = 0; cand < mcand_size; ++cand){
+			    		if(Michel_candidates[cand][0] == run_num && Michel_candidates[cand][1] == ev_num && Michel_candidates[cand][2] == cluster){
+			    			michels_survived_ord_alg += 1;
+			    			break;
+			    		}
+			    	}
 				    //////////////////////////
 					//Starting Moving Window
 				 	track_def prev_chunk;
@@ -417,13 +430,6 @@ int main(int argc, char **argv){
 			     				continue;
 			     			}
 			     		}
-				     	if(false && prev_eigenratio > min_prev_ratio && post_eigenratio > min_post_ratio){
-							cout << "(X,Y,Z) = " <<  ord_trk[i].x << ", " << ord_trk[i].y << ", " << ord_trk[i].z << "; before and after kink eigenvalue ratio (bk, ak): " << prev_eigenratio << ", " << post_eigenratio << "; Cos(theta) = " << dotProd << " => theta = " << acos(dotProd) * 180./PI << endl;
-							cout << "Eigenvector bk: " << prev_results.eVecs[0](0) << ", " << prev_results.eVecs[0](1) << ", " << prev_results.eVecs[0](2) << endl;
-							cout << "Eigenvector ak: " << post_results.eVecs[0](0) << ", " << post_results.eVecs[0](1) << ", " << post_results.eVecs[0](2) << endl;
-							cout << i << endl;
-							cout << "#########################################################" << endl;
-						}
 						if(prev_eigenratio < EVRs[evr]) continue;
 						if(post_eigenratio < EVRs[evr]) continue;
 						if(dotProd > min_ang){
@@ -480,22 +486,29 @@ int main(int argc, char **argv){
 		    efficiency = ((float)michel_count)/((float)(s-1));
 		    ver_rms = sqrt((1./((float)michel_count)) * ver_rms);
 		    ver_mean = (1./((float)michel_count)) * ver_mean;
-		    cout << "Total number of tracks = " << total_num_tracks << endl;
+		    cout << "###################################################################" << endl;
+		    cout << "Total number of tracks = " << total_num_tracks << "; Number of Michels in sample = " << s - 1 << endl;
 		    cout << "Tracks after ordering algorithm = " << tracks_survived_ord_alg << " with alpha = " << alpha << endl;
+		    cout << "Michel clusters that survived the ordering algorithm = " << michels_survived_ord_alg << endl;
 		    cout << "Tracks that were selected as Michels  = " << track_selected_as_michel << endl;
 		    cout << "Tracks correctly selected as selected as Michels = " << michel_count << endl;
-		    cout << "##############################################" << endl;
+		    cout << "#####################################" << endl;
 		    cout << "Cuts applied on bk, ak: " << EVRs[evr] << ", " << EVRs[evr] << endl;
 		    cout << "Cuts applied on Cos(/theta): Min = " << angles[ang] << ", Max = " << max_costheta << endl;
 		    cout << "Cuts applied on /theta: Max = " << acos(angles[ang]) * 180./ PI << ", Min = " << acos(max_costheta) * 180./ PI << endl;
 		    //cout << "Cuts applied on /theta: Max = " << acos(min_costheta) * 180./PI << ", Max = " << acos(max_costheta) * 180/PI << endl;
-		    cout << "##############################################" << endl;
+		    cout << "#####################################" << endl;
 		    cout << "Efficiency: " <<  efficiency << "; Purity = " << purity <<"; Vertex RMS = " << ver_rms << "; Vertex Mean = " << ver_mean << endl;
+		    cout << "###################################################################" << endl;
+		    cout << (float) counter/(float)count * 100. << "%" << endl;
+  			counter += 1;
+		    cout << endl;
 		    nt_study -> Fill(alpha,angles[ang],EVRs[evr],purity,efficiency,ver_rms,ver_mean,tracks_survived_ord_alg,track_selected_as_michel,michel_count);  
 		}
   	}
   	f_output->Write();
   	f_output->Close();
+  	cout << "DONE" << endl;
   	return 0;
 }
 
